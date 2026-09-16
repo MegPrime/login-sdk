@@ -1,4 +1,4 @@
-import type { EnforcerAuthOptions, EnforcerSession, SessionStorageAdapter } from './types';
+import type { EnforcerAuthOptions, EnforcerSession, SessionStorageAdapter } from './types.js';
 export declare function resolveStorage(storage: EnforcerAuthOptions['storage']): SessionStorageAdapter;
 export declare function loadSession(store: SessionStorageAdapter, key: string): EnforcerSession | null;
 export declare function saveSession(store: SessionStorageAdapter, key: string, session: EnforcerSession): void;

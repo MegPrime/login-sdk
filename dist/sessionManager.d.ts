@@ -1,5 +1,5 @@
 import type { EnforcerAuthClient } from './client.js';
-import type { EnforcerSession, SessionStorageAdapter } from './types';
+import type { EnforcerSession, SessionStorageAdapter } from './types.js';
 /**
  * Owns the session outside React so the token is always current for callers
  * that aren't components (the hook packages' `getToken`), and so refresh can be

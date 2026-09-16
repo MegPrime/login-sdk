@@ -1,4 +1,4 @@
-import { EnforcerAuthError } from './errors';
+import { EnforcerAuthError } from './errors.js';
 import { clearSession, loadSession, millisUntilExpiry, saveSession } from './storage.js';
 /** Retry backoff for failures that must NOT sign the user out. */
 const BACKOFF_MS = [1_000, 2_000, 5_000, 10_000, 30_000, 60_000];

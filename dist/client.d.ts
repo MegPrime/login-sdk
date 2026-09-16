@@ -1,4 +1,4 @@
-import type { EmailStatus, EnforcerAuthConfig, EnforcerAuthOptions, EnforcerSession } from './types';
+import type { EmailStatus, EnforcerAuthConfig, EnforcerAuthOptions, EnforcerSession } from './types.js';
 interface OtpRequestResult {
     success?: boolean;
     message?: string;

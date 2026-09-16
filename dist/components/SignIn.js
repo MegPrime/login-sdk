@@ -1,7 +1,7 @@
 import { Fragment as _Fragment, jsx as _jsx, jsxs as _jsxs } from "react/jsx-runtime";
 import { useEffect, useId, useMemo, useRef } from 'react';
 import { useEnforcerAuth } from '../provider.js';
-import { ensureStyles } from '../styles';
+import { ensureStyles } from '../styles.js';
 import { useSignInFlow } from '../useSignInFlow.js';
 const DEFAULT_LABELS = {
     title: 'Sign in',

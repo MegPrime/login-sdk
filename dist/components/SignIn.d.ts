@@ -1,6 +1,6 @@
 import { type CSSProperties, type ReactNode } from 'react';
 import { type SignInFlow } from '../useSignInFlow.js';
-import type { EnforcerAppearance, EnforcerLabels } from '../types';
+import type { EnforcerAppearance, EnforcerLabels } from '../types.js';
 export interface SignInProps {
     appearance?: EnforcerAppearance;
     labels?: EnforcerLabels;

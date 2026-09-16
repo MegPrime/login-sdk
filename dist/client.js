@@ -1,4 +1,4 @@
-import { EnforcerAuthError } from './errors';
+import { EnforcerAuthError } from './errors.js';
 /** enforcer-v3's OpenAPI spec mounts the API here. */
 export const DEFAULT_BASE_PATH = '/api/v1/enforcer';
 function joinUrl(baseUrl, basePath, path) {

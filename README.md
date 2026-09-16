@@ -26,7 +26,7 @@ import.
 ## Install
 
 ```bash
-npm install github:MegPrime/login-sdk#v0.1.1
+npm install github:MegPrime/login-sdk#v0.1.2
 ```
 
 No registry account or token is needed. The package installs as

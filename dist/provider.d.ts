@@ -1,6 +1,6 @@
 import { type ReactNode } from 'react';
 import { EnforcerAuthClient } from './client.js';
-import type { AuthStatus, EnforcerAccount, EnforcerAuthConfig, EnforcerAuthOptions, EnforcerSession } from './types';
+import type { AuthStatus, EnforcerAccount, EnforcerAuthConfig, EnforcerAuthOptions, EnforcerSession } from './types.js';
 export interface EnforcerAuthContextValue {
     status: AuthStatus;
     session: EnforcerSession | null;

@@ -7,12 +7,12 @@ export type { ProtectProps } from './components/Gate.js';
 export { useSignInFlow, normalizePhone } from './useSignInFlow.js';
 export type { SignInFlow, SignInStep } from './useSignInFlow.js';
 export { EnforcerAuthClient, DEFAULT_BASE_PATH } from './client.js';
-export { EnforcerAuthError, isEnforcerAuthError } from './errors';
-export type { EnforcerErrorCode } from './errors';
+export { EnforcerAuthError, isEnforcerAuthError } from './errors.js';
+export type { EnforcerErrorCode } from './errors.js';
 export { getAccessToken, getFreshAccessToken, onAccessTokenChange } from './tokenStore.js';
 export { sessionManager, SessionManager } from './sessionManager.js';
 export type { RefreshReason } from './sessionManager.js';
-export { CSS as enforcerLoginStyles, ensureStyles } from './styles';
-export { PROVIDER_BY_METHOD } from './types';
-export type { AuthMethod, AuthStatus, ConfigureServiceFn, EmailStatus, EnforcerAccount, EnforcerAppearance, EnforcerAuthConfig, EnforcerAuthOptions, EnforcerLabels, EnforcerSession, EnforcerTenant, SessionStorageAdapter, } from './types';
+export { CSS as enforcerLoginStyles, ensureStyles } from './styles.js';
+export { PROVIDER_BY_METHOD } from './types.js';
+export type { AuthMethod, AuthStatus, ConfigureServiceFn, EmailStatus, EnforcerAccount, EnforcerAppearance, EnforcerAuthConfig, EnforcerAuthOptions, EnforcerLabels, EnforcerSession, EnforcerTenant, SessionStorageAdapter, } from './types.js';
 //# sourceMappingURL=index.d.ts.map

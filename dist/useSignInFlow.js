@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { EnforcerAuthError } from './errors';
+import { EnforcerAuthError } from './errors.js';
 import { useEnforcerAuth } from './provider.js';
-import { PROVIDER_BY_METHOD } from './types';
+import { PROVIDER_BY_METHOD } from './types.js';
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 /** Keeps digits and a leading +, then applies the default country code. */
 export function normalizePhone(input, defaultCountryCode = '+1') {

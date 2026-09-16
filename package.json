@@ -1,6 +1,6 @@
 {
   "name": "@instruxi-io/enforcer-login-sdk",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "description": "Drop-in auth UI for enforcer-v3 — email & phone OTP sign-in, session management, and headless hooks.",
   "type": "module",
   "main": "./dist/index.js",

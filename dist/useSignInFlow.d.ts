@@ -1,5 +1,5 @@
-import { EnforcerAuthError } from './errors';
-import { type AuthMethod, type EmailStatus, type EnforcerSession } from './types';
+import { EnforcerAuthError } from './errors.js';
+import { type AuthMethod, type EmailStatus, type EnforcerSession } from './types.js';
 export type SignInStep = 'identifier' | 'code';
 export interface SignInFlow {
     step: SignInStep;
