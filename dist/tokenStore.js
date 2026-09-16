@@ -1,4 +1,4 @@
-import { sessionManager } from './sessionManager';
+import { sessionManager } from './sessionManager.js';
 /**
  * Non-React accessors for the current session.
  *

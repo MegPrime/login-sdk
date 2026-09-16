@@ -1,5 +1,5 @@
 import { Fragment as _Fragment, jsx as _jsx } from "react/jsx-runtime";
-import { useEnforcerAuth } from '../provider';
+import { useEnforcerAuth } from '../provider.js';
 /** Renders children only once a session exists. */
 export function SignedIn({ children }) {
     const { status } = useEnforcerAuth();

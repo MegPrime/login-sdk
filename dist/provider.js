@@ -1,9 +1,9 @@
 import { jsx as _jsx } from "react/jsx-runtime";
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, useSyncExternalStore, } from 'react';
-import { DEFAULT_BASE_PATH, EnforcerAuthClient } from './client';
-import { sessionManager } from './sessionManager';
-import { resolveStorage } from './storage';
-import { getFreshAccessToken } from './tokenStore';
+import { DEFAULT_BASE_PATH, EnforcerAuthClient } from './client.js';
+import { sessionManager } from './sessionManager.js';
+import { resolveStorage } from './storage.js';
+import { getFreshAccessToken } from './tokenStore.js';
 const EnforcerAuthContext = createContext(null);
 export function EnforcerAuthProvider({ children, ...options }) {
     const { baseUrl, basePath, tenantCode, storage, storageKey = 'enforcer.session', refreshSkewSeconds = 60, bootstrapAuthConfig = true, configureService, configureHookServices: hookServices = ['v3'], hookServiceBaseUrls, credentials = 'include', onSignIn, onSignOut, onError, } = options;

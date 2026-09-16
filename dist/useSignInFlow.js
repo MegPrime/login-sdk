@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { EnforcerAuthError } from './errors';
-import { useEnforcerAuth } from './provider';
+import { useEnforcerAuth } from './provider.js';
 import { PROVIDER_BY_METHOD } from './types';
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 /** Keeps digits and a leading +, then applies the default country code. */
