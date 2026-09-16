@@ -1,0 +1,36 @@
+{
+  "name": "@instruxi-io/enforcer-login-sdk",
+  "version": "0.1.0",
+  "description": "Drop-in auth UI for enforcer-v3 — email & phone OTP sign-in, session management, and headless hooks.",
+  "type": "module",
+  "main": "./dist/index.js",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "sideEffects": false,
+  "peerDependencies": {
+    "react": ">=18"
+  },
+  "keywords": [
+    "enforcer",
+    "auth",
+    "otp",
+    "react",
+    "login"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/instruxi-io/enforcer-login-sdk.git"
+  },
+  "license": "Proprietary",
+  "author": "Instruxi",
+  "private": false
+}
