@@ -1,7 +1,7 @@
 {
   "name": "@instruxi-io/enforcer-login-sdk",
-  "version": "0.1.2",
-  "description": "Drop-in auth UI for enforcer-v3 — email & phone OTP sign-in, session management, and headless hooks.",
+  "version": "0.1.3",
+  "description": "Drop-in auth UI for enforcer-v3 — email & phone OTP, native SIWE wallet sign-in, session management, and headless hooks.",
   "type": "module",
   "main": "./dist/index.js",
   "module": "./dist/index.js",
@@ -23,6 +23,8 @@
     "enforcer",
     "auth",
     "otp",
+    "siwe",
+    "wallet",
     "react",
     "login"
   ],

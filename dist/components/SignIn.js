@@ -2,16 +2,23 @@ import { Fragment as _Fragment, jsx as _jsx, jsxs as _jsxs } from "react/jsx-run
 import { useEffect, useId, useMemo, useRef } from 'react';
 import { useEnforcerAuth } from '../provider.js';
 import { ensureStyles } from '../styles.js';
+import { isWalletMethod } from '../siwe.js';
 import { useSignInFlow } from '../useSignInFlow.js';
 const DEFAULT_LABELS = {
     title: 'Sign in',
     subtitle: 'Enter your details to continue',
     emailTab: 'Email',
     phoneTab: 'Phone',
+    walletTab: 'Wallet',
     emailLabel: 'Email address',
     emailPlaceholder: 'you@company.com',
     phoneLabel: 'Phone number',
     phonePlaceholder: '+1 555 000 0000',
+    walletSubtitle: 'Sign a message to continue. No transaction or gas is required.',
+    walletButton: 'Connect wallet',
+    walletConnectingButton: 'Connecting…',
+    walletSigningButton: 'Check your wallet…',
+    walletUnavailable: 'No browser wallet found. Install MetaMask or another EIP-1193 wallet, then try again.',
     continueButton: 'Continue',
     sendingButton: 'Sending code…',
     codeTitle: 'Enter your code',
@@ -27,6 +34,13 @@ const DEFAULT_LABELS = {
     signOutButton: 'Sign out',
     poweredBy: '',
 };
+function methodTabLabel(method, labels) {
+    if (method === 'email')
+        return labels.emailTab;
+    if (method === 'phone')
+        return labels.phoneTab;
+    return labels.walletTab;
+}
 function fill(template, vars) {
     return template.replace(/\{(\w+)\}/g, (m, k) => (k in vars ? String(vars[k]) : m));
 }
@@ -45,7 +59,7 @@ function appearanceStyle(a) {
     return vars;
 }
 /**
- * The drop-in sign-in card: method tabs → identifier → 6-digit code → session.
+ * The drop-in sign-in card: method tabs → email/phone OTP or SIWE wallet → session.
  * Everything it does is available headlessly via `useSignInFlow()`.
  */
 export function SignIn({ appearance = {}, labels: labelOverrides, header, footer, signedInFallback, autoSubmit = true, className, style, children, }) {
@@ -83,23 +97,30 @@ export function SignIn({ appearance = {}, labels: labelOverrides, header, footer
     if (status === 'authenticated') {
         if (signedInFallback !== undefined)
             return _jsx(_Fragment, { children: signedInFallback });
-        const name = account?.first_name || account?.username || account?.email || '';
+        const name = account?.first_name || account?.username || account?.email || account?.wallet_address || '';
         return (_jsx("div", { ...cardProps, children: _jsxs("div", { className: "esdk-signed-in", children: [_jsx("div", { className: "esdk-avatar", "aria-hidden": "true", children: (name || '?').slice(0, 1).toUpperCase() }), _jsxs("div", { children: [_jsx("p", { className: "esdk-subtitle", children: labels.signedInAs }), _jsx("p", { className: "esdk-title", children: name || 'your account' })] }), _jsx("button", { type: "button", className: "esdk-button", onClick: () => void signOut(), children: labels.signOutButton })] }) }));
     }
     if (children)
         return _jsx("div", { ...cardProps, children: children(flow) });
     // The tenant runs privy (or another non-native scheme) — OTP would 403.
     if (!otpAvailable) {
-        return (_jsxs("div", { ...cardProps, children: [_jsxs("div", { className: "esdk-header", children: [_jsx(Brand, { appearance: appearance }), _jsx("h1", { className: "esdk-title", children: labels.title })] }), _jsxs("p", { className: "esdk-error", role: "alert", children: ["This workspace signs in with ", authConfig?.auth_provider, ". Email and phone codes are not enabled here."] })] }));
+        return (_jsxs("div", { ...cardProps, children: [_jsxs("div", { className: "esdk-header", children: [_jsx(Brand, { appearance: appearance }), _jsx("h1", { className: "esdk-title", children: labels.title })] }), _jsxs("p", { className: "esdk-error", role: "alert", children: ["This workspace signs in with ", authConfig?.auth_provider, ". Native email, phone, and wallet sign-in are not enabled here."] })] }));
     }
     const isEmail = flow.method === 'email';
+    const wallet = isWalletMethod(flow.method);
     const showTabs = flow.methods.length > 1;
-    return (_jsxs("div", { ...cardProps, children: [header, _jsxs("div", { className: "esdk-header", children: [_jsx(Brand, { appearance: appearance }), _jsx("h1", { className: "esdk-title", children: flow.step === 'code' ? labels.codeTitle : labels.title }), _jsx("p", { className: "esdk-subtitle", children: flow.step === 'code'
-                            ? fill(labels.codeSubtitle, { identifier: flow.sentTo ?? '' })
-                            : labels.subtitle })] }), flow.step === 'identifier' && showTabs && (_jsx("div", { className: "esdk-tabs", role: "tablist", children: flow.methods.map((m) => (_jsx("button", { type: "button", role: "tab", "aria-selected": flow.method === m, className: "esdk-tab", onClick: () => flow.setMethod(m), children: m === 'email' ? labels.emailTab : labels.phoneTab }, m))) })), flow.step === 'identifier' ? (_jsxs("form", { className: "esdk-form", onSubmit: (e) => {
+    const subtitle = flow.step === 'code'
+        ? fill(labels.codeSubtitle, { identifier: flow.sentTo ?? '' })
+        : wallet
+            ? labels.walletSubtitle
+            : labels.subtitle;
+    return (_jsxs("div", { ...cardProps, children: [header, _jsxs("div", { className: "esdk-header", children: [_jsx(Brand, { appearance: appearance }), _jsx("h1", { className: "esdk-title", children: flow.step === 'code' ? labels.codeTitle : labels.title }), _jsx("p", { className: "esdk-subtitle", children: subtitle })] }), flow.step === 'identifier' && showTabs && (_jsx("div", { className: "esdk-tabs", role: "tablist", children: flow.methods.map((m) => (_jsx("button", { type: "button", role: "tab", "aria-selected": flow.method === m, className: "esdk-tab", onClick: () => flow.setMethod(m), children: methodTabLabel(m, labels) }, m))) })), flow.step === 'identifier' ? (wallet ? (_jsxs("form", { className: "esdk-form", onSubmit: (e) => {
+                    e.preventDefault();
+                    void flow.signInWithWallet();
+                }, children: [flow.connectedAddress && (_jsx("p", { className: "esdk-notice", children: flow.connectedAddress })), flow.error && (_jsx("p", { className: "esdk-error", role: "alert", children: flow.error.message })), !flow.walletAvailable && !flow.error && (_jsx("p", { className: "esdk-notice", children: labels.walletUnavailable })), _jsx("button", { type: "submit", className: "esdk-button", disabled: flow.isConnecting, children: flow.isConnecting ? (_jsxs(_Fragment, { children: [_jsx("span", { className: "esdk-spinner", "aria-hidden": "true" }), labels.walletConnectingButton] })) : (labels.walletButton) })] })) : (_jsxs("form", { className: "esdk-form", onSubmit: (e) => {
                     e.preventDefault();
                     void flow.sendCode();
-                }, children: [_jsxs("div", { className: "esdk-field", children: [_jsx("label", { className: "esdk-label", htmlFor: `${fieldId}-id`, children: isEmail ? labels.emailLabel : labels.phoneLabel }), _jsx("input", { id: `${fieldId}-id`, ref: identifierRef, className: "esdk-input", type: isEmail ? 'email' : 'tel', inputMode: isEmail ? 'email' : 'tel', autoComplete: isEmail ? 'email' : 'tel', placeholder: isEmail ? labels.emailPlaceholder : labels.phonePlaceholder, value: flow.identifier, onChange: (e) => flow.setIdentifier(e.target.value), disabled: flow.isSending, "aria-invalid": flow.error ? true : undefined })] }), flow.error && (_jsx("p", { className: "esdk-error", role: "alert", children: flow.error.message })), _jsx("button", { type: "submit", className: "esdk-button", disabled: !flow.canSubmitIdentifier || flow.isSending, children: flow.isSending ? (_jsxs(_Fragment, { children: [_jsx("span", { className: "esdk-spinner", "aria-hidden": "true" }), labels.sendingButton] })) : (labels.continueButton) })] })) : (_jsxs("form", { className: "esdk-form", onSubmit: (e) => {
+                }, children: [_jsxs("div", { className: "esdk-field", children: [_jsx("label", { className: "esdk-label", htmlFor: `${fieldId}-id`, children: isEmail ? labels.emailLabel : labels.phoneLabel }), _jsx("input", { id: `${fieldId}-id`, ref: identifierRef, className: "esdk-input", type: isEmail ? 'email' : 'tel', inputMode: isEmail ? 'email' : 'tel', autoComplete: isEmail ? 'email' : 'tel', placeholder: isEmail ? labels.emailPlaceholder : labels.phonePlaceholder, value: flow.identifier, onChange: (e) => flow.setIdentifier(e.target.value), disabled: flow.isSending, "aria-invalid": flow.error ? true : undefined })] }), flow.error && (_jsx("p", { className: "esdk-error", role: "alert", children: flow.error.message })), _jsx("button", { type: "submit", className: "esdk-button", disabled: !flow.canSubmitIdentifier || flow.isSending, children: flow.isSending ? (_jsxs(_Fragment, { children: [_jsx("span", { className: "esdk-spinner", "aria-hidden": "true" }), labels.sendingButton] })) : (labels.continueButton) })] }))) : (_jsxs("form", { className: "esdk-form", onSubmit: (e) => {
                     e.preventDefault();
                     void flow.verifyCode();
                 }, children: [_jsxs("div", { className: "esdk-field", children: [_jsx("label", { className: "esdk-label", htmlFor: `${fieldId}-code`, children: labels.codeLabel }), _jsx("input", { id: `${fieldId}-code`, ref: codeRef, className: "esdk-input esdk-input-code", type: "text", inputMode: "numeric", autoComplete: "one-time-code", maxLength: flow.otpLength, placeholder: '0'.repeat(flow.otpLength), value: flow.code, onChange: (e) => flow.setCode(e.target.value), disabled: flow.isVerifying, "aria-invalid": flow.error ? true : undefined })] }), flow.emailStatus && !flow.emailStatus.exists && (_jsx("p", { className: "esdk-notice", children: labels.newAccountNotice })), flow.error && (_jsx("p", { className: "esdk-error", role: "alert", children: flow.error.message })), _jsx("button", { type: "submit", className: "esdk-button", disabled: !flow.canSubmitCode || flow.isVerifying, children: flow.isVerifying ? (_jsxs(_Fragment, { children: [_jsx("span", { className: "esdk-spinner", "aria-hidden": "true" }), labels.verifyingButton] })) : (labels.verifyButton) }), _jsxs("div", { className: "esdk-actions", children: [_jsx("button", { type: "button", className: "esdk-link", onClick: flow.editIdentifier, children: labels.backButton }), _jsx("button", { type: "button", className: "esdk-link", onClick: () => void flow.resendCode(), disabled: flow.resendIn > 0 || flow.isSending, children: flow.resendIn > 0

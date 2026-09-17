@@ -1,10 +1,12 @@
 # @instruxi-io/enforcer-login-sdk
 
 Drop-in sign-in UI for enforcer-v3 — a Clerk/Privy-style widget your developers
-mount in two components. Email and phone OTP, session persistence, silent token
-refresh, and a fully headless mode when the default UI isn't enough.
+mount in two components. Email and phone OTP, native Sign-In with Ethereum
+(SIWE / wallet), session persistence, silent token refresh, and a fully
+headless mode when the default UI isn't enough.
 
-Zero runtime dependencies. React is the only peer.
+Zero runtime dependencies. React is the only peer. SIWE talks to
+`window.ethereum` (EIP-1193) directly — no wagmi or viem.
 
 ```tsx
 import { EnforcerAuthProvider, SignIn, SignedIn, SignedOut } from '@instruxi-io/enforcer-login-sdk'
@@ -26,7 +28,7 @@ import.
 ## Install
 
 ```bash
-npm install github:MegPrime/login-sdk#v0.1.2
+npm install github:MegPrime/login-sdk#v0.1.3
 ```
 
 No registry account or token is needed. The package installs as
@@ -36,17 +38,33 @@ repo holds only the built distribution; the source lives in
 
 ## How the flow works
 
+**Email / phone OTP**
+
 1. `POST /auth/otp/request` (email) or `POST /auth/sms/request` (phone) sends a
    6-digit code, valid 10 minutes.
 2. `POST /auth/login` with `{provider, email|phone, otp, tenant_code}` exchanges
    the code for `{token, refresh_token, expires_at, account, is_new_account}`.
-3. The session is persisted and the access token is refreshed via
-   `POST /auth/refresh` shortly before `expires_at`.
-4. `signOut()` calls `POST /auth/logout`, revoking the refresh-token family.
+
+**SIWE (wallet)**
+
+1. The widget calls `eth_requestAccounts` on the injected EIP-1193 provider
+   (`window.ethereum`, or `walletProvider` if you pass one).
+2. `POST /auth/siwe/nonce` with `{wallet_address, tenant_code?}` returns a
+   one-time `{nonce}` (top-level; not wrapped in `data`).
+3. The wallet `personal_sign`s an EIP-4361 message bound to that nonce,
+   `window.location.host`, and the wallet's `eth_chainId`.
+4. `POST /auth/login` with `{provider: 'siwe', message, signature, tenant_code?}`
+   returns the same session shape as OTP.
+
+After either path, the session is persisted and the access token is refreshed
+via `POST /auth/refresh` shortly before `expires_at`. `signOut()` calls
+`POST /auth/logout`, revoking the refresh-token family.
 
 On mount the provider also calls `GET /auth/config` to learn the tenant's
 scheme. If the tenant runs Privy rather than native auth, the widget says so up
-front instead of failing at submit with a 403 `wrong_auth_scheme`.
+front instead of failing at submit with a 403 `wrong_auth_scheme`. SIWE is a
+native method — it is available when `auth_provider` is `"native"` (or when
+config bootstrap is off) **and** `methods` includes `'siwe'` or `'wallet'`.
 
 ## Configuration
 
@@ -57,7 +75,7 @@ Everything enforcer-v3 exposes for these flows is a prop on the provider.
 | `baseUrl` | — | **Required.** API origin, e.g. `https://api.example.com` |
 | `basePath` | `/api/v1/enforcer` | Mount path from the OpenAPI spec. `""` for root |
 | `tenantCode` | instance default | Tenant join code; scopes every call |
-| `methods` | `['email']` | `['email','phone']` — also the tab order |
+| `methods` | `['email']` | Tab order. `'email'`, `'phone'`, `'siwe'` / `'wallet'` |
 | `otpLength` | `6` | Digits in the code |
 | `resendCooldownSeconds` | `30` | Server allows 10 credential requests/min per IP |
 | `refreshSkewSeconds` | `60` | Refresh this long before the token expires |
@@ -67,6 +85,10 @@ Everything enforcer-v3 exposes for these flows is a prop on the provider.
 | `checkEmailStatus` | `false` | `GET /auth/email-status` for "sign in" vs "create account" copy |
 | `devOtpAutofill` | `false` | Auto-fill from `dev_otp` (servers with `expose_dev_otp`) |
 | `defaultCountryCode` | `'+1'` | Applied to phone numbers typed without one |
+| `walletProvider` | `window.ethereum` | EIP-1193 wallet; pass a mock in tests |
+| `siweDomain` / `siweUri` | page host / origin | EIP-4361 domain and URI |
+| `siweStatement` | `'Sign in with Ethereum.'` | Shown in the wallet prompt |
+| `siweChainId` | wallet `eth_chainId` | Override the signed chain id |
 | `headers` / `credentials` / `fetch` | — | Passed through to every request |
 | `configureService` | — | See [wiring the hook packages](#wiring-the-hook-packages) |
 | `onSignIn` / `onSignOut` / `onError` | — | Callbacks |
@@ -85,6 +107,31 @@ Everything enforcer-v3 exposes for these flows is a prop on the provider.
 `appearance` maps onto `--esdk-*` custom properties. For finer control pass
 `variables` (any `--esdk-*` override) or set `injectStyles: false` and style
 `.esdk-*` yourself.
+
+Wallet-only tenants (SIWE-native, no email OTP) pass `methods={['siwe']}` and
+do not hardcode a tenant join code unless the host app already has one:
+
+```tsx
+<EnforcerAuthProvider
+  baseUrl="https://api.example.com"
+  methods={['siwe']}
+  // tenantCode={process.env.ENFORCER_TENANT_CODE}  // only if you have one
+>
+  <SignedOut><SignIn /></SignedOut>
+  <SignedIn><Dashboard /></SignedIn>
+</EnforcerAuthProvider>
+```
+
+Email + wallet together:
+
+```tsx
+<EnforcerAuthProvider baseUrl={baseUrl} methods={['email', 'siwe']}>
+  <SignIn />
+</EnforcerAuthProvider>
+```
+
+`'wallet'` is accepted as an alias of `'siwe'`. Default `methods` stays
+`['email']`, so existing OTP integrations do not grow a wallet tab.
 
 ## Reading the session
 
@@ -130,8 +177,10 @@ just one consumer of it.
 ```tsx
 const flow = useSignInFlow()
 // step, method, identifier, code, sentTo, error, resendIn,
-// canSubmitIdentifier, canSubmitCode, isSending, isVerifying,
-// sendCode(), resendCode(), verifyCode(), editIdentifier(), reset()
+// canSubmitIdentifier, canSubmitCode, isSending, isVerifying, isConnecting,
+// walletAvailable, connectedAddress,
+// sendCode(), resendCode(), verifyCode(), signInWithWallet(),
+// editIdentifier(), reset()
 ```
 
 For a custom layout that keeps the built-in card chrome, pass a render prop
@@ -150,7 +199,8 @@ if (isEnforcerAuthError(e) && e.code === 'rate_limited') { /* back off */ }
 Codes the auth surface emits: `invalid_otp`, `rate_limited`, `tenant_not_found`,
 `registration_rejected`, `account_inactive`, `account_deleted`,
 `wrong_auth_scheme`, `unsupported_provider`, `email_taken`,
-`invalid_refresh_token`, `refresh_raced`, plus `network_error` from the client.
+`invalid_refresh_token`, `refresh_raced`, `wallet_unavailable`,
+`wallet_rejected`, plus `network_error` from the client.
 
 ## Status of phone OTP
 
@@ -186,4 +236,21 @@ connection on the tenant. Until both are in place, keep `methods={['email']}`.
 bun install
 bun run build      # tsc → dist (ESM + .d.ts)
 bun run typecheck
+bun test
 ```
+
+## Public distribution
+
+Source stays in this private repo. Consumers install the built tree from
+`MegPrime/login-sdk`. Cut a public tag **from `master` after this change is
+merged** — do not publish `v0.1.3` from an unmerged PR branch:
+
+```bash
+# on master, after merge, working tree clean
+# README install line must already reference github:MegPrime/login-sdk#v0.1.3
+bun run release:dist
+```
+
+`DRY_RUN=1 bun run release:dist` builds, tests, and stages the tarball without
+pushing. The script refuses a dirty tree and refuses to ship if README does not
+mention the tag being released.

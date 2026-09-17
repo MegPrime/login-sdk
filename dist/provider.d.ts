@@ -13,7 +13,7 @@ export interface EnforcerAuthContextValue {
     isNewAccount: boolean;
     /** GET /auth/config result, once bootstrapped. */
     authConfig: EnforcerAuthConfig | null;
-    /** False when the tenant runs a non-native scheme, so OTP would 403. */
+    /** False when the tenant runs a non-native scheme, so OTP/SIWE would 403. */
     otpAvailable: boolean;
     options: EnforcerAuthOptions;
     client: EnforcerAuthClient;

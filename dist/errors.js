@@ -39,13 +39,17 @@ function friendlyMessage(code, detail) {
         case 'wrong_auth_scheme':
             return 'This workspace uses a different sign-in method.';
         case 'unsupported_provider':
-            return 'Enter a valid email address or phone number.';
+            return 'Enter a valid email address, phone number, or connect a wallet.';
         case 'email_taken':
             return 'That email is already registered in this workspace.';
         case 'invalid_refresh_token':
             return 'Your session expired. Please sign in again.';
         case 'network_error':
             return 'Could not reach the server. Check your connection and try again.';
+        case 'wallet_unavailable':
+            return 'No browser wallet found. Install MetaMask or another EIP-1193 wallet, then try again.';
+        case 'wallet_rejected':
+            return 'Wallet request was declined. Approve the signature in your wallet to continue.';
         default:
             return detail || 'Something went wrong. Please try again.';
     }

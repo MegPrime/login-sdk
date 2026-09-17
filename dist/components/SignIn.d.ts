@@ -18,7 +18,7 @@ export interface SignInProps {
     children?: (flow: SignInFlow) => ReactNode;
 }
 /**
- * The drop-in sign-in card: method tabs → identifier → 6-digit code → session.
+ * The drop-in sign-in card: method tabs → email/phone OTP or SIWE wallet → session.
  * Everything it does is available headlessly via `useSignInFlow()`.
  */
 export declare function SignIn({ appearance, labels: labelOverrides, header, footer, signedInFallback, autoSubmit, className, style, children, }: SignInProps): import("react").JSX.Element;

@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { EnforcerAuthError } from './errors.js';
 import { useEnforcerAuth } from './provider.js';
+import { isWalletMethod, requestWalletSignature, resolveWalletProvider, } from './siwe.js';
 import { PROVIDER_BY_METHOD } from './types.js';
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 /** Keeps digits and a leading +, then applies the default country code. */
@@ -22,13 +23,25 @@ function isValidPhone(normalized) {
     return /^\+\d{8,15}$/.test(normalized);
 }
 /**
- * The whole email/phone OTP state machine, with no markup. Use this to build a
- * custom sign-in UI; `<SignIn />` is a consumer of exactly this hook.
+ * The whole email/phone OTP + SIWE state machine, with no markup. Use this to
+ * build a custom sign-in UI; `<SignIn />` is a consumer of exactly this hook.
  */
 export function useSignInFlow() {
     const { client, options, completeSignIn } = useEnforcerAuth();
-    const { tenantCode, methods = ['email'], otpLength = 6, resendCooldownSeconds = 30, checkEmailStatus = false, devOtpAutofill = false, defaultCountryCode = '+1', onError, } = options;
-    const available = methods.length ? methods : ['email'];
+    const { tenantCode, methods = ['email'], otpLength = 6, resendCooldownSeconds = 30, checkEmailStatus = false, devOtpAutofill = false, defaultCountryCode = '+1', walletProvider, siweDomain, siweUri, siweStatement, siweChainId, onError, } = options;
+    const available = useMemo(() => {
+        const src = methods.length ? methods : ['email'];
+        const seen = new Set();
+        const out = [];
+        for (const m of src) {
+            const key = isWalletMethod(m) ? 'siwe' : m;
+            if (seen.has(key))
+                continue;
+            seen.add(key);
+            out.push(m);
+        }
+        return out;
+    }, [methods]);
     const [method, setMethodState] = useState(available[0]);
     const [step, setStep] = useState('identifier');
     const [identifier, setIdentifier] = useState('');
@@ -39,8 +52,19 @@ export function useSignInFlow() {
     const [isVerifying, setIsVerifying] = useState(false);
     const [error, setError] = useState(null);
     const [resendIn, setResendIn] = useState(0);
+    const [connectedAddress, setConnectedAddress] = useState(null);
+    const [isConnecting, setIsConnecting] = useState(false);
     const onErrorRef = useRef(onError);
     onErrorRef.current = onError;
+    // If the host changes `methods` (or we collapsed siwe/wallet), keep the
+    // active tab on something that is still offered.
+    useEffect(() => {
+        if (available.includes(method))
+            return;
+        setMethodState(available[0] ?? 'email');
+        setStep('identifier');
+    }, [available, method]);
+    const walletAvailable = Boolean(resolveWalletProvider(walletProvider));
     // Cooldown ticker.
     useEffect(() => {
         if (resendIn <= 0)
@@ -49,7 +73,11 @@ export function useSignInFlow() {
         return () => clearTimeout(t);
     }, [resendIn]);
     const normalized = useMemo(() => (method === 'phone' ? normalizePhone(identifier, defaultCountryCode) : identifier.trim().toLowerCase()), [identifier, method, defaultCountryCode]);
-    const canSubmitIdentifier = useMemo(() => (method === 'email' ? EMAIL_RE.test(normalized) : isValidPhone(normalized)), [method, normalized]);
+    const canSubmitIdentifier = useMemo(() => {
+        if (isWalletMethod(method))
+            return true;
+        return method === 'email' ? EMAIL_RE.test(normalized) : isValidPhone(normalized);
+    }, [method, normalized]);
     const setCode = useCallback((value) => {
         // Digits only, capped at the expected length.
         setCodeState(value.replace(/\D/g, '').slice(0, otpLength));
@@ -70,6 +98,8 @@ export function useSignInFlow() {
         onErrorRef.current?.(err);
     }, []);
     const deliver = useCallback(async () => {
+        if (isWalletMethod(method))
+            return false;
         setIsSending(true);
         setError(null);
         try {
@@ -109,12 +139,85 @@ export function useSignInFlow() {
         resendCooldownSeconds,
         fail,
     ]);
+    const signInWithWallet = useCallback(async () => {
+        if (isConnecting)
+            return null;
+        setIsConnecting(true);
+        setError(null);
+        try {
+            const provider = resolveWalletProvider(walletProvider);
+            if (!provider) {
+                throw new EnforcerAuthError(0, 'wallet_unavailable', 'No EIP-1193 wallet is available');
+            }
+            let accounts;
+            try {
+                accounts = await provider.request({ method: 'eth_requestAccounts' });
+            }
+            catch (error) {
+                if (error &&
+                    typeof error === 'object' &&
+                    (error.code === 4001 ||
+                        /reject|denied|cancel/i.test(String(error.message ?? error)))) {
+                    throw new EnforcerAuthError(0, 'wallet_rejected', 'User rejected the wallet request', error);
+                }
+                throw error;
+            }
+            const address = Array.isArray(accounts) ? String(accounts[0] ?? '') : '';
+            if (!address) {
+                throw new EnforcerAuthError(0, 'wallet_unavailable', 'Wallet returned no account');
+            }
+            setConnectedAddress(address);
+            const { nonce } = await client.requestSiweNonce(address, tenantCode);
+            const signed = await requestWalletSignature({
+                provider,
+                address,
+                nonce,
+                domain: siweDomain || (typeof window !== 'undefined' ? window.location.host : 'localhost'),
+                uri: siweUri || (typeof window !== 'undefined' ? window.location.origin : 'http://localhost'),
+                statement: siweStatement ?? 'Sign in with Ethereum.',
+                chainId: siweChainId,
+            });
+            setConnectedAddress(signed.address);
+            const session = await client.login({
+                provider: 'siwe',
+                message: signed.message,
+                signature: signed.signature,
+                tenantCode,
+            });
+            completeSignIn(session);
+            return session;
+        }
+        catch (e) {
+            fail(e);
+            return null;
+        }
+        finally {
+            setIsConnecting(false);
+        }
+    }, [
+        isConnecting,
+        walletProvider,
+        client,
+        tenantCode,
+        siweDomain,
+        siweUri,
+        siweStatement,
+        siweChainId,
+        completeSignIn,
+        fail,
+    ]);
     const sendCode = useCallback(async () => {
+        if (isWalletMethod(method)) {
+            if (isConnecting)
+                return;
+            await signInWithWallet();
+            return;
+        }
         if (!canSubmitIdentifier || isSending)
             return;
         if (await deliver())
             setStep('code');
-    }, [canSubmitIdentifier, isSending, deliver]);
+    }, [method, isConnecting, signInWithWallet, canSubmitIdentifier, isSending, deliver]);
     const resendCode = useCallback(async () => {
         if (resendIn > 0 || isSending)
             return;
@@ -124,6 +227,8 @@ export function useSignInFlow() {
     const verifyCode = useCallback(async (override) => {
         const otp = (override ?? code).trim();
         if (otp.length !== otpLength || isVerifying || !sentTo)
+            return null;
+        if (isWalletMethod(method))
             return null;
         setIsVerifying(true);
         setError(null);
@@ -159,6 +264,7 @@ export function useSignInFlow() {
         setEmailStatus(null);
         setError(null);
         setResendIn(0);
+        setConnectedAddress(null);
     }, []);
     return {
         step,
@@ -175,15 +281,19 @@ export function useSignInFlow() {
         setCode,
         otpLength,
         emailStatus,
-        isSending,
+        isSending: isSending || isConnecting,
         isVerifying,
+        isConnecting,
         error,
         resendIn,
         canSubmitIdentifier,
         canSubmitCode: code.length === otpLength,
+        walletAvailable,
+        connectedAddress,
         sendCode,
         resendCode,
         verifyCode,
+        signInWithWallet,
         editIdentifier,
         reset,
     };

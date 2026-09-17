@@ -1,8 +1,11 @@
-/** Sign-in methods this SDK implements. enforcer-v3 also supports privy, google,
- *  siwe, passkey, oidc and saml — those are out of scope here. */
-export type AuthMethod = 'email' | 'phone';
+import type { Eip1193Provider } from './siwe.js';
+/** Sign-in methods this SDK implements. `'siwe'` and `'wallet'` are aliases
+ *  for native Sign-In with Ethereum. enforcer-v3 also supports privy, google,
+ *  passkey, oidc and saml — those are out of scope here. */
+export type AuthMethod = 'email' | 'phone' | 'siwe' | 'wallet';
 /** `provider` value sent to POST /auth/login for each method. */
-export declare const PROVIDER_BY_METHOD: Record<AuthMethod, 'email_otp' | 'phone_otp'>;
+export declare const PROVIDER_BY_METHOD: Record<AuthMethod, 'email_otp' | 'phone_otp' | 'siwe'>;
+export type LoginProvider = 'email_otp' | 'phone_otp' | 'siwe';
 /** enforcer-v3's account shape (the fields a login UI actually uses). */
 export interface EnforcerAccount {
     id?: string;
@@ -85,10 +88,16 @@ export interface EnforcerLabels {
     subtitle?: string;
     emailTab?: string;
     phoneTab?: string;
+    walletTab?: string;
     emailLabel?: string;
     emailPlaceholder?: string;
     phoneLabel?: string;
     phonePlaceholder?: string;
+    walletSubtitle?: string;
+    walletButton?: string;
+    walletConnectingButton?: string;
+    walletSigningButton?: string;
+    walletUnavailable?: string;
     continueButton?: string;
     sendingButton?: string;
     codeTitle?: string;
@@ -126,7 +135,10 @@ export interface EnforcerAuthOptions {
     basePath?: string;
     /** Tenant join code. Omit to use the instance's default tenant. */
     tenantCode?: string;
-    /** Methods to offer, in tab order. Default `['email']`. */
+    /**
+     * Methods to offer, in tab order. Default `['email']`. `'siwe'` and
+     * `'wallet'` are the same Sign-In with Ethereum flow.
+     */
     methods?: AuthMethod[];
     /** Digits in the OTP. enforcer-v3 issues 6. */
     otpLength?: number;
@@ -146,11 +158,27 @@ export interface EnforcerAuthOptions {
     /** Storage key. Default "enforcer.session". */
     storageKey?: string;
     /**
-     * Call GET /auth/config on mount and refuse OTP when the tenant runs a
-     * non-native scheme (e.g. privy), instead of failing at submit with a 403
-     * `wrong_auth_scheme`. Default true.
+     * Call GET /auth/config on mount and refuse native methods (email, phone,
+     * SIWE) when the tenant runs a non-native scheme (e.g. privy), instead of
+     * failing at submit with a 403 `wrong_auth_scheme`. Default true.
      */
     bootstrapAuthConfig?: boolean;
+    /**
+     * EIP-1193 wallet used for SIWE. Default `window.ethereum`. Pass a mock in
+     * tests, or a getter if the injected provider appears after mount.
+     */
+    walletProvider?: Eip1193Provider | (() => Eip1193Provider | undefined | null);
+    /**
+     * EIP-4361 `domain`. Default `window.location.host`. Must match the page the
+     * user is looking at or wallets (and the server) will reject the signature.
+     */
+    siweDomain?: string;
+    /** EIP-4361 `uri`. Default `window.location.origin`. */
+    siweUri?: string;
+    /** Optional statement shown in the wallet prompt. */
+    siweStatement?: string;
+    /** Override chain id. Default: the wallet's `eth_chainId`. */
+    siweChainId?: number;
     /**
      * Call GET /auth/email-status before sending an email code so the UI can say
      * "sign in" vs "create your account". One extra request. Default false.

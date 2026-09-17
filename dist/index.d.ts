@@ -14,5 +14,7 @@ export { sessionManager, SessionManager } from './sessionManager.js';
 export type { RefreshReason } from './sessionManager.js';
 export { CSS as enforcerLoginStyles, ensureStyles } from './styles.js';
 export { PROVIDER_BY_METHOD } from './types.js';
-export type { AuthMethod, AuthStatus, ConfigureServiceFn, EmailStatus, EnforcerAccount, EnforcerAppearance, EnforcerAuthConfig, EnforcerAuthOptions, EnforcerLabels, EnforcerSession, EnforcerTenant, SessionStorageAdapter, } from './types.js';
+export type { AuthMethod, AuthStatus, ConfigureServiceFn, EmailStatus, EnforcerAccount, EnforcerAppearance, EnforcerAuthConfig, EnforcerAuthOptions, EnforcerLabels, EnforcerSession, EnforcerTenant, LoginProvider, SessionStorageAdapter, } from './types.js';
+export { buildSiweMessage, isWalletMethod, normalizeHexAddress, requestWalletSignature, resolveWalletProvider, } from './siwe.js';
+export type { Eip1193Provider, SiweMessageFields, SignSiweInput, SignSiweResult } from './siwe.js';
 //# sourceMappingURL=index.d.ts.map

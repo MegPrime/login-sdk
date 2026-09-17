@@ -93,15 +93,33 @@ export class EnforcerAuthClient {
             body: { phone, ...(tenantCode ? { tenant_code: tenantCode } : {}) },
         });
     }
-    /** POST /auth/login — exchanges the code for a session. */
+    /** POST /auth/siwe/nonce — one-time nonce bound to this wallet address. */
+    async requestSiweNonce(walletAddress, tenantCode) {
+        const res = await this.request('/auth/siwe/nonce', {
+            method: 'POST',
+            body: {
+                wallet_address: walletAddress,
+                ...(tenantCode ? { tenant_code: tenantCode } : {}),
+            },
+        });
+        // Live enforcer-v3 returns `{success, nonce}` at the top level, not `{data}`.
+        const nonce = res.data?.nonce ?? res.nonce;
+        if (!nonce) {
+            throw new EnforcerAuthError(200, 'auth_error', 'siwe nonce response carried no nonce', res);
+        }
+        return { nonce };
+    }
+    /** POST /auth/login — exchanges an OTP or a SIWE signature for a session. */
     async login(input) {
         const res = await this.request('/auth/login', {
             method: 'POST',
             body: {
                 provider: input.provider,
-                otp: input.otp,
+                ...(input.otp ? { otp: input.otp } : {}),
                 ...(input.email ? { email: input.email } : {}),
                 ...(input.phone ? { phone: input.phone } : {}),
+                ...(input.message ? { message: input.message } : {}),
+                ...(input.signature ? { signature: input.signature } : {}),
                 ...(input.tenantCode ? { tenant_code: input.tenantCode } : {}),
             },
         });

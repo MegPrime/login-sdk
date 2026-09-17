@@ -27,12 +27,18 @@ export declare class EnforcerAuthClient {
     requestEmailOtp(email: string, tenantCode?: string): Promise<OtpRequestResult>;
     /** POST /auth/sms/request — sends a code over the tenant's Twilio Verify. */
     requestPhoneOtp(phone: string, tenantCode?: string): Promise<OtpRequestResult>;
-    /** POST /auth/login — exchanges the code for a session. */
+    /** POST /auth/siwe/nonce — one-time nonce bound to this wallet address. */
+    requestSiweNonce(walletAddress: string, tenantCode?: string): Promise<{
+        nonce: string;
+    }>;
+    /** POST /auth/login — exchanges an OTP or a SIWE signature for a session. */
     login(input: {
-        provider: 'email_otp' | 'phone_otp';
-        otp: string;
+        provider: 'email_otp' | 'phone_otp' | 'siwe';
+        otp?: string;
         email?: string;
         phone?: string;
+        message?: string;
+        signature?: string;
         tenantCode?: string;
     }): Promise<EnforcerSession>;
     /** POST /auth/refresh — rotates the refresh token and mints a new access token. */
