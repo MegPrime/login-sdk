@@ -28,7 +28,7 @@ import.
 ## Install
 
 ```bash
-npm install github:MegPrime/login-sdk#v0.1.3
+npm install github:MegPrime/login-sdk#v0.2.0
 ```
 
 No registry account or token is needed. The package installs as
@@ -74,9 +74,12 @@ Everything enforcer-v3 exposes for these flows is a prop on the provider.
 | --- | --- | --- |
 | `baseUrl` | — | **Required.** API origin, e.g. `https://api.example.com` |
 | `basePath` | `/api/v1/enforcer` | Mount path from the OpenAPI spec. `""` for root |
-| `tenantCode` | instance default | Tenant join code; scopes every call |
-| `methods` | `['email']` | Tab order. `'email'`, `'phone'`, `'siwe'` / `'wallet'` |
-| `otpLength` | `6` | Digits in the code |
+| `tenantCode` | see [tenant codes](#tenant-codes) | Tenant join code; scopes every call |
+| `tenantCodeInput` | `'optional'` | Join-code field when no code is configured: `'optional' \| 'required' \| false` |
+| `tenantCodeParam` | `'tenant'` | URL parameter that carries a tenant code. `false` to ignore the URL |
+| `rememberTenant` | `true` | Remember the tenant code and branding after sign-in |
+| `methods` | tenant config, else `['email']` | Tab order. `'email'`, `'phone'`, `'siwe'` / `'wallet'` |
+| `otpLength` | tenant config, else `6` | Digits in the code |
 | `resendCooldownSeconds` | `30` | Server allows 10 credential requests/min per IP |
 | `refreshSkewSeconds` | `60` | Refresh this long before the token expires |
 | `storage` | `'local'` | `'local' \| 'session' \| 'memory'` or your own adapter |
@@ -108,8 +111,9 @@ Everything enforcer-v3 exposes for these flows is a prop on the provider.
 `variables` (any `--esdk-*` override) or set `injectStyles: false` and style
 `.esdk-*` yourself.
 
-Wallet-only tenants (SIWE-native, no email OTP) pass `methods={['siwe']}` and
-do not hardcode a tenant join code unless the host app already has one:
+Wallet-only tenants (SIWE-native, no email OTP) pass `methods={['siwe']}`. The
+join-code field and the [tenant codes](#tenant-codes) order apply to wallet
+sign-in too:
 
 ```tsx
 <EnforcerAuthProvider
@@ -130,8 +134,67 @@ Email + wallet together:
 </EnforcerAuthProvider>
 ```
 
-`'wallet'` is accepted as an alias of `'siwe'`. Default `methods` stays
-`['email']`, so existing OTP integrations do not grow a wallet tab.
+`'wallet'` is accepted as an alias of `'siwe'`. With no `methods` prop and no
+tenant config, `methods` stays `['email']`, so existing OTP integrations do not
+grow a wallet tab.
+
+## Tenant codes
+
+Embed the join code in config the way you would a Privy app ID, and users never
+see it:
+
+```tsx
+<EnforcerAuthProvider baseUrl={apiUrl} tenantCode={import.meta.env.VITE_ENFORCER_TENANT_CODE}>
+```
+
+Leave it out and `<SignIn />` shows a **Join code** field under the email/phone
+input. The SDK uses the first of these it finds:
+
+1. **The `tenantCode` prop.** The field is hidden.
+2. **A link.** `https://app.example.com/?tenant=K7M2-Q9XW` signs people into
+   that tenant, and the field is hidden. Rename the parameter with
+   `tenantCodeParam`.
+3. **What the user typed into the field.**
+4. **This browser's last sign-in.** It pre-fills the field. A code from a link
+   or the field is saved when sign-in succeeds. A prop-supplied code is never
+   written.
+5. **The instance's default tenant.** This is what a blank field means.
+
+`tenantCodeInput` controls the field: `'optional'` (the default, where blank
+means the default tenant), `'required'` (Continue stays disabled until a code
+is typed) or `false` (never shown). Codes are matched exactly and
+case-sensitively by the server, so the field only trims whitespace. Headless
+flows get `showTenantCode`, `tenantCodeRequired`, `tenantCode` and
+`setTenantCode` from `useSignInFlow()`.
+
+If a remembered code's tenant no longer exists, the SDK forgets the code and
+falls back to the default. `useEnforcerAuth()` exposes `tenantCode`, `tenantCodeSource`,
+`setTenantCode()` and `forgetTenantCode()`.
+
+On an `open` tenant the join code is the credential: anyone holding it can
+join, so a code shipped in a public bundle is effectively public. On an
+`invite_only` tenant the code alone admits nobody.
+
+### Tenant-driven defaults
+
+When `GET /auth/config` returns them, these become the defaults. A prop you set
+always wins.
+
+| Field | Drives |
+| --- | --- |
+| `methods` | The method tabs (methods the SDK can't show yet, such as `passkey`, are ignored) |
+| `otp_length` | Digits in the code field |
+| `tenant` `{name, logo_url}` | The logo and name on the signed-out card |
+| `self_join_policy` | An "invite-only" notice before a code is sent |
+
+enforcer-v3 serves these from `/auth/config` (instruxi-io/enforcer-v3#414).
+Against an older server, the signed-out card is branded from the tenant cached
+at this browser's last sign-in (or from `appearance.logoUrl` / `brandName`).
+
+With `checkEmailStatus` on, an address with no account sees the "didn't get a
+code? ask an admin to invite you" hint, unless the tenant is known to be `open`.
+That's because an invite-only tenant emails such an address a "no access" notice
+instead of a code, and still answers 200.
 
 ## Reading the session
 
@@ -243,11 +306,11 @@ bun test
 
 Source stays in this private repo. Consumers install the built tree from
 `MegPrime/login-sdk`. Cut a public tag **from `master` after this change is
-merged** — do not publish `v0.1.3` from an unmerged PR branch:
+merged** — do not publish `v0.2.0` from an unmerged PR branch:
 
 ```bash
 # on master, after merge, working tree clean
-# README install line must already reference github:MegPrime/login-sdk#v0.1.3
+# README install line must already reference github:MegPrime/login-sdk#v0.2.0
 bun run release:dist
 ```
 

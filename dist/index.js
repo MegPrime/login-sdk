@@ -8,5 +8,6 @@ export { getAccessToken, getFreshAccessToken, onAccessTokenChange } from './toke
 export { sessionManager, SessionManager } from './sessionManager.js';
 export { CSS as enforcerLoginStyles, ensureStyles } from './styles.js';
 export { PROVIDER_BY_METHOD } from './types.js';
+export { readTenantCodeFromUrl, resolveTenantCode } from './tenant.js';
 export { buildSiweMessage, isWalletMethod, normalizeHexAddress, requestWalletSignature, resolveWalletProvider, } from './siwe.js';
 //# sourceMappingURL=index.js.map

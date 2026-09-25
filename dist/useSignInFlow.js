@@ -3,6 +3,10 @@ import { EnforcerAuthError } from './errors.js';
 import { useEnforcerAuth } from './provider.js';
 import { isWalletMethod, requestWalletSignature, resolveWalletProvider, } from './siwe.js';
 import { PROVIDER_BY_METHOD } from './types.js';
+const SUPPORTED_METHODS = ['email', 'phone', 'siwe', 'wallet'];
+function isAuthMethod(m) {
+    return SUPPORTED_METHODS.includes(m);
+}
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 /** Keeps digits and a leading +, then applies the default country code. */
 export function normalizePhone(input, defaultCountryCode = '+1') {
@@ -27,10 +31,19 @@ function isValidPhone(normalized) {
  * build a custom sign-in UI; `<SignIn />` is a consumer of exactly this hook.
  */
 export function useSignInFlow() {
-    const { client, options, completeSignIn } = useEnforcerAuth();
-    const { tenantCode, methods = ['email'], otpLength = 6, resendCooldownSeconds = 30, checkEmailStatus = false, devOtpAutofill = false, defaultCountryCode = '+1', walletProvider, siweDomain, siweUri, siweStatement, siweChainId, onError, } = options;
+    const { client, options, completeSignIn, authConfig, tenantCode: resolvedTenantCode, tenantCodeSource, forgetTenantCode, setTenantCode: commitTenantCode, } = useEnforcerAuth();
+    const { tenantCodeInput = 'optional', resendCooldownSeconds = 30, checkEmailStatus = false, devOtpAutofill = false, defaultCountryCode = '+1', walletProvider, siweDomain, siweUri, siweStatement, siweChainId, onError, } = options;
+    // A prop the integrator set wins; otherwise the tenant's own config; otherwise
+    // the defaults this SDK shipped with. Methods this SDK can't render (e.g.
+    // passkey) are dropped from the tenant's list rather than shown as dead tabs.
+    const tenantMethods = (authConfig?.methods ?? []).filter(isAuthMethod).join(',');
     const available = useMemo(() => {
-        const src = methods.length ? methods : ['email'];
+        const src = options.methods?.length
+            ? options.methods
+            : tenantMethods
+                ? tenantMethods.split(',')
+                : ['email'];
+        // 'siwe' and 'wallet' are one flow; keep whichever comes first.
         const seen = new Set();
         const out = [];
         for (const m of src) {
@@ -41,9 +54,26 @@ export function useSignInFlow() {
             out.push(m);
         }
         return out;
-    }, [methods]);
-    const [method, setMethodState] = useState(available[0]);
+    }, [options.methods, tenantMethods]);
+    const otpLength = options.otpLength ?? authConfig?.otp_length ?? 6;
+    const inviteOnly = authConfig?.self_join_policy === 'invite_only';
+    const [methodState, setMethodState] = useState(available[0]);
+    // The tenant's config can arrive after mount and drop the chosen method.
+    const method = available.includes(methodState) ? methodState : available[0];
     const [step, setStep] = useState('identifier');
+    // Config (the prop) or a link decides the tenant; otherwise the user may.
+    const showTenantCode = tenantCodeInput !== false && tenantCodeSource !== 'prop' && tenantCodeSource !== 'url';
+    const tenantCodeRequired = showTenantCode && tenantCodeInput === 'required';
+    const [tenantCodeField, setTenantCodeField] = useState(() => tenantCodeSource === 'stored' ? (resolvedTenantCode ?? '') : '');
+    // Follow the remembered code (it can be dropped after mount) until the user edits the field.
+    const tenantCodeTouched = useRef(false);
+    useEffect(() => {
+        if (tenantCodeTouched.current)
+            return;
+        setTenantCodeField(tenantCodeSource === 'stored' ? (resolvedTenantCode ?? '') : '');
+    }, [resolvedTenantCode, tenantCodeSource]);
+    // The code the OTP went out under, so login is scoped to the same tenant.
+    const [sentTenantCode, setSentTenantCode] = useState(undefined);
     const [identifier, setIdentifier] = useState('');
     const [sentTo, setSentTo] = useState(null);
     const [code, setCodeState] = useState('');
@@ -59,11 +89,11 @@ export function useSignInFlow() {
     // If the host changes `methods` (or we collapsed siwe/wallet), keep the
     // active tab on something that is still offered.
     useEffect(() => {
-        if (available.includes(method))
+        if (available.includes(methodState))
             return;
         setMethodState(available[0] ?? 'email');
         setStep('identifier');
-    }, [available, method]);
+    }, [available, methodState]);
     const walletAvailable = Boolean(resolveWalletProvider(walletProvider));
     // Cooldown ticker.
     useEffect(() => {
@@ -74,10 +104,12 @@ export function useSignInFlow() {
     }, [resendIn]);
     const normalized = useMemo(() => (method === 'phone' ? normalizePhone(identifier, defaultCountryCode) : identifier.trim().toLowerCase()), [identifier, method, defaultCountryCode]);
     const canSubmitIdentifier = useMemo(() => {
+        if (tenantCodeRequired && !tenantCodeField.trim())
+            return false;
         if (isWalletMethod(method))
             return true;
         return method === 'email' ? EMAIL_RE.test(normalized) : isValidPhone(normalized);
-    }, [method, normalized]);
+    }, [method, normalized, tenantCodeRequired, tenantCodeField]);
     const setCode = useCallback((value) => {
         // Digits only, capped at the expected length.
         setCodeState(value.replace(/\D/g, '').slice(0, otpLength));
@@ -94,14 +126,31 @@ export function useSignInFlow() {
     }, []);
     const fail = useCallback((e) => {
         const err = e instanceof EnforcerAuthError ? e : new EnforcerAuthError(0, 'auth_error', String(e), e);
+        // A remembered code that no longer resolves: forget it so the next
+        // attempt goes to the default tenant instead of failing forever.
+        if (err.code === 'tenant_not_found' && tenantCodeSource === 'stored')
+            forgetTenantCode();
         setError(err);
         onErrorRef.current?.(err);
-    }, []);
+    }, [tenantCodeSource, forgetTenantCode]);
+    /**
+     * The tenant code a sign-in attempt goes out under: the join-code field when
+     * it is shown, else the resolved one. Committing what was typed re-runs
+     * /auth/config for that tenant (branding, methods), and it is remembered once
+     * sign-in succeeds.
+     */
+    const takeTenantCode = useCallback(() => {
+        if (!showTenantCode)
+            return resolvedTenantCode;
+        commitTenantCode(tenantCodeField);
+        return tenantCodeField.trim() || undefined;
+    }, [showTenantCode, resolvedTenantCode, tenantCodeField, commitTenantCode]);
     const deliver = useCallback(async () => {
         if (isWalletMethod(method))
             return false;
         setIsSending(true);
         setError(null);
+        const tenantCode = takeTenantCode();
         try {
             if (method === 'email' && checkEmailStatus) {
                 try {
@@ -116,6 +165,7 @@ export function useSignInFlow() {
                 ? await client.requestEmailOtp(normalized, tenantCode)
                 : await client.requestPhoneOtp(normalized, tenantCode);
             setSentTo(normalized);
+            setSentTenantCode(tenantCode);
             setResendIn(resendCooldownSeconds);
             if (devOtpAutofill && res.dev_otp)
                 setCodeState(res.dev_otp.slice(0, otpLength));
@@ -132,7 +182,7 @@ export function useSignInFlow() {
         client,
         method,
         normalized,
-        tenantCode,
+        takeTenantCode,
         checkEmailStatus,
         devOtpAutofill,
         otpLength,
@@ -142,8 +192,11 @@ export function useSignInFlow() {
     const signInWithWallet = useCallback(async () => {
         if (isConnecting)
             return null;
+        if (tenantCodeRequired && !tenantCodeField.trim())
+            return null;
         setIsConnecting(true);
         setError(null);
+        const tenantCode = takeTenantCode();
         try {
             const provider = resolveWalletProvider(walletProvider);
             if (!provider) {
@@ -196,9 +249,11 @@ export function useSignInFlow() {
         }
     }, [
         isConnecting,
+        tenantCodeRequired,
+        tenantCodeField,
+        takeTenantCode,
         walletProvider,
         client,
-        tenantCode,
         siweDomain,
         siweUri,
         siweStatement,
@@ -237,7 +292,7 @@ export function useSignInFlow() {
                 provider: PROVIDER_BY_METHOD[method],
                 otp,
                 ...(method === 'email' ? { email: sentTo } : { phone: sentTo }),
-                tenantCode,
+                tenantCode: sentTenantCode,
             });
             completeSignIn(session);
             return session;
@@ -250,7 +305,7 @@ export function useSignInFlow() {
         finally {
             setIsVerifying(false);
         }
-    }, [client, code, otpLength, isVerifying, sentTo, method, tenantCode, completeSignIn, fail]);
+    }, [client, code, otpLength, isVerifying, sentTo, sentTenantCode, method, completeSignIn, fail]);
     const editIdentifier = useCallback(() => {
         setStep('identifier');
         setCodeState('');
@@ -271,6 +326,14 @@ export function useSignInFlow() {
         method,
         methods: available,
         setMethod,
+        showTenantCode,
+        tenantCodeRequired,
+        tenantCode: tenantCodeField,
+        setTenantCode: (v) => {
+            tenantCodeTouched.current = true;
+            setTenantCodeField(v);
+            setError(null);
+        },
         identifier,
         setIdentifier: (v) => {
             setIdentifier(v);
@@ -281,6 +344,7 @@ export function useSignInFlow() {
         setCode,
         otpLength,
         emailStatus,
+        inviteOnly,
         isSending: isSending || isConnecting,
         isVerifying,
         isConnecting,

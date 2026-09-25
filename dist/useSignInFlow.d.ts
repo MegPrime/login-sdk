@@ -4,9 +4,19 @@ export type SignInStep = 'identifier' | 'code';
 export interface SignInFlow {
     step: SignInStep;
     method: AuthMethod;
-    /** Methods the provider was configured with, in tab order. */
+    /** Methods on offer, in tab order: the `methods` prop, else the tenant's config. */
     methods: AuthMethod[];
     setMethod: (method: AuthMethod) => void;
+    /**
+     * True when `<SignIn />` should show a join-code field: the code did not come
+     * from the `tenantCode` prop or a link, and `tenantCodeInput` isn't false.
+     */
+    showTenantCode: boolean;
+    /** A code must be typed before Continue enables (`tenantCodeInput: 'required'`). */
+    tenantCodeRequired: boolean;
+    /** The raw value in the join-code field. Pre-filled from the last sign-in. */
+    tenantCode: string;
+    setTenantCode: (value: string) => void;
     /** The raw value in the email/phone field. */
     identifier: string;
     setIdentifier: (value: string) => void;
@@ -18,6 +28,8 @@ export interface SignInFlow {
     otpLength: number;
     /** `/auth/email-status` result, when `checkEmailStatus` is on. */
     emailStatus: EmailStatus | null;
+    /** The tenant only admits addresses with a pending invite (`self_join_policy`). */
+    inviteOnly: boolean;
     isSending: boolean;
     isVerifying: boolean;
     error: EnforcerAuthError | null;

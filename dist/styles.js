@@ -69,6 +69,7 @@ export const CSS = `
 .esdk-form { display: flex; flex-direction: column; gap: 14px; }
 .esdk-field { display: flex; flex-direction: column; gap: 6px; }
 .esdk-label { font-size: 13px; font-weight: 500; color: var(--esdk-muted); }
+.esdk-label-hint { font-weight: 400; opacity: 0.75; }
 .esdk-input {
   width: 100%; padding: 11px 13px; font: inherit; color: var(--esdk-fg);
   background: var(--esdk-field-bg); border: 1px solid var(--esdk-border);

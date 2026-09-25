@@ -1,6 +1,7 @@
 import { type ReactNode } from 'react';
 import { EnforcerAuthClient } from './client.js';
-import type { AuthStatus, EnforcerAccount, EnforcerAuthConfig, EnforcerAuthOptions, EnforcerSession } from './types.js';
+import { type TenantCodeSource } from './tenant.js';
+import type { AuthStatus, EnforcerAccount, EnforcerAuthConfig, EnforcerAuthOptions, EnforcerSession, EnforcerTenantBrand } from './types.js';
 export interface EnforcerAuthContextValue {
     status: AuthStatus;
     session: EnforcerSession | null;
@@ -15,6 +16,24 @@ export interface EnforcerAuthContextValue {
     authConfig: EnforcerAuthConfig | null;
     /** False when the tenant runs a non-native scheme, so OTP/SIWE would 403. */
     otpAvailable: boolean;
+    /**
+     * The tenant code every call is scoped to, resolved from the `tenantCode`
+     * prop, a `?tenant=` link, or the last sign-in. Undefined → instance default.
+     */
+    tenantCode: string | undefined;
+    tenantCodeSource: TenantCodeSource;
+    /** Drop a remembered tenant code (e.g. it no longer exists) and re-resolve. */
+    forgetTenantCode: () => void;
+    /**
+     * Use a code the user typed. "" means the instance default. Ignored while a
+     * `tenantCode` prop or a link supplies one.
+     */
+    setTenantCode: (code: string) => void;
+    /**
+     * Name and logo to brand the card with: the signed-in account's tenant, else
+     * `/auth/config`'s tenant, else what was cached at this browser's last sign-in.
+     */
+    tenantBrand: EnforcerTenantBrand | null;
     options: EnforcerAuthOptions;
     client: EnforcerAuthClient;
     /** Adopt a session the SDK did not create (SSR handoff, custom flow). */

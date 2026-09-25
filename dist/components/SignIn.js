@@ -29,7 +29,12 @@ const DEFAULT_LABELS = {
     resendButton: 'Resend code',
     resendCooldown: 'Resend in {seconds}s',
     backButton: 'Use a different one',
+    tenantCodeLabel: 'Join code',
+    tenantCodeOptional: '(optional)',
+    tenantCodePlaceholder: 'K7M2-Q9XW-4TZR',
     newAccountNotice: 'Welcome — your account was created.',
+    inviteOnlyNotice: 'This workspace is invite-only. Use the email address your invitation was sent to.',
+    noCodeHint: "Didn't get a code? This workspace may be invite-only — ask an admin to invite you.",
     signedInAs: 'Signed in as',
     signOutButton: 'Sign out',
     poweredBy: '',
@@ -114,25 +119,36 @@ export function SignIn({ appearance = {}, labels: labelOverrides, header, footer
         : wallet
             ? labels.walletSubtitle
             : labels.subtitle;
-    return (_jsxs("div", { ...cardProps, children: [header, _jsxs("div", { className: "esdk-header", children: [_jsx(Brand, { appearance: appearance }), _jsx("h1", { className: "esdk-title", children: flow.step === 'code' ? labels.codeTitle : labels.title }), _jsx("p", { className: "esdk-subtitle", children: subtitle })] }), flow.step === 'identifier' && showTabs && (_jsx("div", { className: "esdk-tabs", role: "tablist", children: flow.methods.map((m) => (_jsx("button", { type: "button", role: "tab", "aria-selected": flow.method === m, className: "esdk-tab", onClick: () => flow.setMethod(m), children: methodTabLabel(m, labels) }, m))) })), flow.step === 'identifier' ? (wallet ? (_jsxs("form", { className: "esdk-form", onSubmit: (e) => {
+    return (_jsxs("div", { ...cardProps, children: [header, _jsxs("div", { className: "esdk-header", children: [_jsx(Brand, { appearance: appearance }), _jsx("h1", { className: "esdk-title", children: flow.step === 'code' ? labels.codeTitle : labels.title }), _jsx("p", { className: "esdk-subtitle", children: subtitle })] }), flow.step === 'identifier' && showTabs && (_jsx("div", { className: "esdk-tabs", role: "tablist", children: flow.methods.map((m) => (_jsx("button", { type: "button", role: "tab", "aria-selected": flow.method === m, className: "esdk-tab", onClick: () => flow.setMethod(m), children: methodTabLabel(m, labels) }, m))) })), flow.step === 'identifier' && flow.inviteOnly && labels.inviteOnlyNotice && (_jsx("p", { className: "esdk-notice", children: labels.inviteOnlyNotice })), flow.step === 'identifier' ? (wallet ? (_jsxs("form", { className: "esdk-form", onSubmit: (e) => {
                     e.preventDefault();
                     void flow.signInWithWallet();
-                }, children: [flow.connectedAddress && (_jsx("p", { className: "esdk-notice", children: flow.connectedAddress })), flow.error && (_jsx("p", { className: "esdk-error", role: "alert", children: flow.error.message })), !flow.walletAvailable && !flow.error && (_jsx("p", { className: "esdk-notice", children: labels.walletUnavailable })), _jsx("button", { type: "submit", className: "esdk-button", disabled: flow.isConnecting, children: flow.isConnecting ? (_jsxs(_Fragment, { children: [_jsx("span", { className: "esdk-spinner", "aria-hidden": "true" }), labels.walletConnectingButton] })) : (labels.walletButton) })] })) : (_jsxs("form", { className: "esdk-form", onSubmit: (e) => {
+                }, children: [flow.connectedAddress && (_jsx("p", { className: "esdk-notice", children: flow.connectedAddress })), _jsx(TenantCodeField, { flow: flow, labels: labels, id: `${fieldId}-tenant` }), flow.error && (_jsx("p", { className: "esdk-error", role: "alert", children: flow.error.message })), !flow.walletAvailable && !flow.error && (_jsx("p", { className: "esdk-notice", children: labels.walletUnavailable })), _jsx("button", { type: "submit", className: "esdk-button", disabled: flow.isConnecting || !flow.canSubmitIdentifier, children: flow.isConnecting ? (_jsxs(_Fragment, { children: [_jsx("span", { className: "esdk-spinner", "aria-hidden": "true" }), labels.walletConnectingButton] })) : (labels.walletButton) })] })) : (_jsxs("form", { className: "esdk-form", onSubmit: (e) => {
                     e.preventDefault();
                     void flow.sendCode();
-                }, children: [_jsxs("div", { className: "esdk-field", children: [_jsx("label", { className: "esdk-label", htmlFor: `${fieldId}-id`, children: isEmail ? labels.emailLabel : labels.phoneLabel }), _jsx("input", { id: `${fieldId}-id`, ref: identifierRef, className: "esdk-input", type: isEmail ? 'email' : 'tel', inputMode: isEmail ? 'email' : 'tel', autoComplete: isEmail ? 'email' : 'tel', placeholder: isEmail ? labels.emailPlaceholder : labels.phonePlaceholder, value: flow.identifier, onChange: (e) => flow.setIdentifier(e.target.value), disabled: flow.isSending, "aria-invalid": flow.error ? true : undefined })] }), flow.error && (_jsx("p", { className: "esdk-error", role: "alert", children: flow.error.message })), _jsx("button", { type: "submit", className: "esdk-button", disabled: !flow.canSubmitIdentifier || flow.isSending, children: flow.isSending ? (_jsxs(_Fragment, { children: [_jsx("span", { className: "esdk-spinner", "aria-hidden": "true" }), labels.sendingButton] })) : (labels.continueButton) })] }))) : (_jsxs("form", { className: "esdk-form", onSubmit: (e) => {
+                }, children: [_jsxs("div", { className: "esdk-field", children: [_jsx("label", { className: "esdk-label", htmlFor: `${fieldId}-id`, children: isEmail ? labels.emailLabel : labels.phoneLabel }), _jsx("input", { id: `${fieldId}-id`, ref: identifierRef, className: "esdk-input", type: isEmail ? 'email' : 'tel', inputMode: isEmail ? 'email' : 'tel', autoComplete: isEmail ? 'email' : 'tel', placeholder: isEmail ? labels.emailPlaceholder : labels.phonePlaceholder, value: flow.identifier, onChange: (e) => flow.setIdentifier(e.target.value), disabled: flow.isSending, "aria-invalid": flow.error ? true : undefined })] }), _jsx(TenantCodeField, { flow: flow, labels: labels, id: `${fieldId}-tenant` }), flow.error && (_jsx("p", { className: "esdk-error", role: "alert", children: flow.error.message })), _jsx("button", { type: "submit", className: "esdk-button", disabled: !flow.canSubmitIdentifier || flow.isSending, children: flow.isSending ? (_jsxs(_Fragment, { children: [_jsx("span", { className: "esdk-spinner", "aria-hidden": "true" }), labels.sendingButton] })) : (labels.continueButton) })] }))) : (_jsxs("form", { className: "esdk-form", onSubmit: (e) => {
                     e.preventDefault();
                     void flow.verifyCode();
-                }, children: [_jsxs("div", { className: "esdk-field", children: [_jsx("label", { className: "esdk-label", htmlFor: `${fieldId}-code`, children: labels.codeLabel }), _jsx("input", { id: `${fieldId}-code`, ref: codeRef, className: "esdk-input esdk-input-code", type: "text", inputMode: "numeric", autoComplete: "one-time-code", maxLength: flow.otpLength, placeholder: '0'.repeat(flow.otpLength), value: flow.code, onChange: (e) => flow.setCode(e.target.value), disabled: flow.isVerifying, "aria-invalid": flow.error ? true : undefined })] }), flow.emailStatus && !flow.emailStatus.exists && (_jsx("p", { className: "esdk-notice", children: labels.newAccountNotice })), flow.error && (_jsx("p", { className: "esdk-error", role: "alert", children: flow.error.message })), _jsx("button", { type: "submit", className: "esdk-button", disabled: !flow.canSubmitCode || flow.isVerifying, children: flow.isVerifying ? (_jsxs(_Fragment, { children: [_jsx("span", { className: "esdk-spinner", "aria-hidden": "true" }), labels.verifyingButton] })) : (labels.verifyButton) }), _jsxs("div", { className: "esdk-actions", children: [_jsx("button", { type: "button", className: "esdk-link", onClick: flow.editIdentifier, children: labels.backButton }), _jsx("button", { type: "button", className: "esdk-link", onClick: () => void flow.resendCode(), disabled: flow.resendIn > 0 || flow.isSending, children: flow.resendIn > 0
+                }, children: [_jsxs("div", { className: "esdk-field", children: [_jsx("label", { className: "esdk-label", htmlFor: `${fieldId}-code`, children: labels.codeLabel }), _jsx("input", { id: `${fieldId}-code`, ref: codeRef, className: "esdk-input esdk-input-code", type: "text", inputMode: "numeric", autoComplete: "one-time-code", maxLength: flow.otpLength, placeholder: '0'.repeat(flow.otpLength), value: flow.code, onChange: (e) => flow.setCode(e.target.value), disabled: flow.isVerifying, "aria-invalid": flow.error ? true : undefined })] }), flow.emailStatus && !flow.emailStatus.exists && (
+                    // A new address at a tenant that isn't known to be open may have
+                    // been refused: the server then emails a "no access" notice instead
+                    // of a code, and answers 200 either way so it can't be probed.
+                    _jsx("p", { className: "esdk-notice", children: authConfig?.self_join_policy === 'open'
+                            ? labels.newAccountNotice
+                            : labels.noCodeHint })), flow.error && (_jsx("p", { className: "esdk-error", role: "alert", children: flow.error.message })), _jsx("button", { type: "submit", className: "esdk-button", disabled: !flow.canSubmitCode || flow.isVerifying, children: flow.isVerifying ? (_jsxs(_Fragment, { children: [_jsx("span", { className: "esdk-spinner", "aria-hidden": "true" }), labels.verifyingButton] })) : (labels.verifyButton) }), _jsxs("div", { className: "esdk-actions", children: [_jsx("button", { type: "button", className: "esdk-link", onClick: flow.editIdentifier, children: labels.backButton }), _jsx("button", { type: "button", className: "esdk-link", onClick: () => void flow.resendCode(), disabled: flow.resendIn > 0 || flow.isSending, children: flow.resendIn > 0
                                     ? fill(labels.resendCooldown, { seconds: flow.resendIn })
                                     : labels.resendButton })] })] })), footer, labels.poweredBy && _jsx("p", { className: "esdk-footer", children: labels.poweredBy })] }));
 }
-/** Logo + product name, falling back to the tenant on the current session. */
+/** The join-code input, when the tenant code isn't configured. Shared by the OTP and wallet forms. */
+function TenantCodeField({ flow, labels, id, }) {
+    if (!flow.showTenantCode)
+        return null;
+    return (_jsxs("div", { className: "esdk-field", children: [_jsxs("label", { className: "esdk-label", htmlFor: id, children: [labels.tenantCodeLabel, !flow.tenantCodeRequired && labels.tenantCodeOptional && (_jsxs("span", { className: "esdk-label-hint", children: [" ", labels.tenantCodeOptional] }))] }), _jsx("input", { id: id, className: "esdk-input", type: "text", autoComplete: "off", autoCapitalize: "off", spellCheck: false, placeholder: labels.tenantCodePlaceholder, value: flow.tenantCode, onChange: (e) => flow.setTenantCode(e.target.value), disabled: flow.isSending, required: flow.tenantCodeRequired, "aria-invalid": flow.error?.code === 'tenant_not_found' ? true : undefined })] }));
+}
+/** Logo + product name: appearance props, else the tenant (see `tenantBrand`). */
 function Brand({ appearance }) {
-    const { account } = useEnforcerAuth();
-    const tenant = account?.tenant;
-    const logo = appearance.logoUrl ?? tenant?.logo_url;
-    const name = appearance.brandName ?? tenant?.name;
+    const { tenantBrand } = useEnforcerAuth();
+    const logo = appearance.logoUrl ?? tenantBrand?.logo_url;
+    const name = appearance.brandName ?? tenantBrand?.name;
     if (!logo && !name)
         return null;
     return logo ? (_jsx("img", { className: "esdk-logo", src: logo, alt: name ?? '' })) : (_jsx("span", { className: "esdk-label", children: name }));

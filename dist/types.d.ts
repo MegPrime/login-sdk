@@ -42,11 +42,30 @@ export interface EnforcerSession {
     account?: EnforcerAccount;
     is_new_account?: boolean;
 }
-/** GET /auth/config → data. Tells the UI which scheme the tenant runs. */
+/** The public face of a tenant: what the sign-in card shows before anyone signs in. */
+export interface EnforcerTenantBrand {
+    name?: string;
+    logo_url?: string;
+}
+/**
+ * GET /auth/config → data. Tells the UI which scheme the tenant runs.
+ *
+ * Only `auth_provider` and `privy_app_id` are served today. The rest are read
+ * when the server sends them, and each becomes the default for the matching
+ * provider prop (a prop the integrator sets always wins).
+ */
 export interface EnforcerAuthConfig {
     /** "native" (email/phone/siwe/passkey) or "privy". OTP requires "native". */
     auth_provider?: string;
     privy_app_id?: string;
+    /** Sign-in methods the tenant has enabled, e.g. `["email","phone"]`. */
+    methods?: string[];
+    /** Digits in the codes this server issues. */
+    otp_length?: number;
+    /** Name and logo for the signed-out card. */
+    tenant?: EnforcerTenantBrand;
+    /** "open" or "invite_only". Invite-only tenants refuse new addresses without an invite. */
+    self_join_policy?: 'open' | 'invite_only' | (string & {});
 }
 /** GET /auth/email-status → data. */
 export interface EmailStatus {
@@ -110,7 +129,18 @@ export interface EnforcerLabels {
     /** `{seconds}` is replaced with the remaining cooldown. */
     resendCooldown?: string;
     backButton?: string;
+    tenantCodeLabel?: string;
+    /** Appended to the join-code label when the field is optional. */
+    tenantCodeOptional?: string;
+    tenantCodePlaceholder?: string;
     newAccountNotice?: string;
+    /** Shown on the first step when the tenant is invite-only. */
+    inviteOnlyNotice?: string;
+    /**
+     * Shown on the code step for an address with no account when the tenant may
+     * be invite-only: the server then emails a "no access" notice instead of a code.
+     */
+    noCodeHint?: string;
     signedInAs?: string;
     signOutButton?: string;
     poweredBy?: string;
@@ -133,14 +163,44 @@ export interface EnforcerAuthOptions {
      * `/api/v1/enforcer`, which is the default — pass "" if yours is at the root.
      */
     basePath?: string;
-    /** Tenant join code. Omit to use the instance's default tenant. */
+    /**
+     * Tenant join code, usually from build/env config so end users never type
+     * one. When omitted, the SDK falls back to the `tenantCodeParam` URL
+     * parameter, then the code remembered from this browser's last sign-in,
+     * then the instance's default tenant.
+     */
     tenantCode?: string;
     /**
-     * Methods to offer, in tab order. Default `['email']`. `'siwe'` and
-     * `'wallet'` are the same Sign-In with Ethereum flow.
+     * URL query parameter that carries a tenant code, so a link like
+     * `https://app.example.com/?tenant=K7M2-Q9XW` signs people into that tenant.
+     * Default "tenant". Set false to ignore the URL.
+     */
+    tenantCodeParam?: string | false;
+    /**
+     * The join-code field on `<SignIn />`, shown only when the code did not come
+     * from the `tenantCode` prop or a link — so embedding the code in config
+     * (e.g. a Vite variable) hides it, and leaving it out lets users type one.
+     * A remembered code pre-fills it.
+     *
+     * "optional": blank signs into the instance's default tenant. "required":
+     * Continue stays disabled until a code is typed. false: never shown.
+     * Default "optional".
+     */
+    tenantCodeInput?: 'optional' | 'required' | false;
+    /**
+     * Remember the tenant code (and the tenant's name and logo) after sign-in, so
+     * a returning user lands in the same workspace with its branding. Codes that
+     * came from a link or the join-code field are saved — a `tenantCode` prop is
+     * already known. Default true.
+     */
+    rememberTenant?: boolean;
+    /**
+     * Methods to offer, in tab order. Default: what the tenant has enabled in
+     * `/auth/config`, else `['email']`. `'siwe'` and `'wallet'` are the same
+     * Sign-In with Ethereum flow.
      */
     methods?: AuthMethod[];
-    /** Digits in the OTP. enforcer-v3 issues 6. */
+    /** Digits in the OTP. Default: the server's `otp_length`, else 6. */
     otpLength?: number;
     /**
      * Seconds before "Resend" re-enables. Default 30 — the server allows 10

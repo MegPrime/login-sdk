@@ -1,12 +1,14 @@
 import { jsx as _jsx } from "react/jsx-runtime";
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, useSyncExternalStore, } from 'react';
 import { DEFAULT_BASE_PATH, EnforcerAuthClient } from './client.js';
+import { isEnforcerAuthError } from './errors.js';
 import { sessionManager } from './sessionManager.js';
 import { resolveStorage } from './storage.js';
+import { loadTenantBrand, resolveTenantCode, saveTenantBrand, saveTenantCode, } from './tenant.js';
 import { getFreshAccessToken } from './tokenStore.js';
 const EnforcerAuthContext = createContext(null);
 export function EnforcerAuthProvider({ children, ...options }) {
-    const { baseUrl, basePath, tenantCode, storage, storageKey = 'enforcer.session', refreshSkewSeconds = 60, bootstrapAuthConfig = true, configureService, configureHookServices: hookServices = ['v3'], hookServiceBaseUrls, credentials = 'include', onSignIn, onSignOut, onError, } = options;
+    const { baseUrl, basePath, tenantCode: tenantCodeProp, tenantCodeParam = 'tenant', rememberTenant = true, storage, storageKey = 'enforcer.session', refreshSkewSeconds = 60, bootstrapAuthConfig = true, configureService, configureHookServices: hookServices = ['v3'], hookServiceBaseUrls, credentials = 'include', onSignIn, onSignOut, onError, } = options;
     const store = useMemo(() => resolveStorage(storage), [storage]);
     const client = useMemo(() => new EnforcerAuthClient({
         baseUrl,
@@ -53,6 +55,52 @@ export function EnforcerAuthProvider({ children, ...options }) {
     useEffect(() => sessionManager.start(), []);
     const { session, refreshing } = useSyncExternalStore(sessionManager.subscribe, sessionManager.getSnapshot, sessionManager.getSnapshot);
     const [authConfig, setAuthConfig] = useState(null);
+    // What the user typed into the join-code field, once submitted.
+    const [typedTenantCode, setTypedTenantCode] = useState(null);
+    // Bumped to re-run resolution after a remembered code is dropped.
+    const [tenantEpoch, setTenantEpoch] = useState(0);
+    const resolvedTenant = useMemo(() => resolveTenantCode({
+        prop: tenantCodeProp,
+        urlParam: tenantCodeParam,
+        typed: typedTenantCode,
+        store,
+        storageKey,
+        remember: rememberTenant,
+    }), 
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [tenantCodeProp, tenantCodeParam, typedTenantCode, store, storageKey, rememberTenant, tenantEpoch]);
+    const tenantCode = resolvedTenant.code;
+    const tenantCodeSource = resolvedTenant.source;
+    const forgetTenantCode = useCallback(() => {
+        saveTenantCode(store, storageKey, null);
+        setTenantEpoch((n) => n + 1);
+    }, [store, storageKey]);
+    const setTenantCode = useCallback((code) => setTypedTenantCode(code.trim()), []);
+    // Remember where this browser signs in, so the next visit needs no link and
+    // shows the workspace's branding before sign-in. A prop-supplied code is
+    // already known to the app and is not written.
+    const signedInTenant = session?.account?.tenant;
+    useEffect(() => {
+        if (!session || !rememberTenant)
+            return;
+        if (tenantCode && tenantCodeSource !== 'prop')
+            saveTenantCode(store, storageKey, tenantCode);
+        // Blank field: the user chose the default tenant, so stop pre-filling the old one.
+        if (!tenantCode && tenantCodeSource === 'input')
+            saveTenantCode(store, storageKey, null);
+        if (signedInTenant) {
+            saveTenantBrand(store, storageKey, tenantCode, {
+                name: signedInTenant.name,
+                logo_url: signedInTenant.logo_url,
+            });
+        }
+    }, [session, signedInTenant, rememberTenant, tenantCode, tenantCodeSource, store, storageKey]);
+    const cachedBrand = useMemo(() => (rememberTenant ? loadTenantBrand(store, storageKey, tenantCode) : null), [rememberTenant, store, storageKey, tenantCode]);
+    const tenantBrand = useMemo(() => {
+        const candidates = [signedInTenant, authConfig?.tenant, cachedBrand];
+        const hit = candidates.find((b) => b && (b.name || b.logo_url));
+        return hit ? { name: hit.name, logo_url: hit.logo_url } : null;
+    }, [signedInTenant, authConfig, cachedBrand]);
     const optionsRef = useRef(options);
     optionsRef.current = options;
     const setSession = useCallback((next) => {
@@ -92,13 +140,19 @@ export function EnforcerAuthProvider({ children, ...options }) {
             .catch((error) => {
             if (ac.signal.aborted)
                 return;
+            // A remembered code whose tenant is gone would strand the user on an
+            // error. Drop it; resolution falls through to the instance default.
+            if (tenantCodeSource === 'stored' && isEnforcerAuthError(error) && error.code === 'tenant_not_found') {
+                forgetTenantCode();
+                return;
+            }
             // Non-fatal: older servers don't serve /auth/config. Assume native so
             // sign-in still works, and let the submit path report the truth.
             setAuthConfig({});
             callbacks.current.onError?.(error);
         });
         return () => ac.abort();
-    }, [client, tenantCode, bootstrapAuthConfig]);
+    }, [client, tenantCode, tenantCodeSource, forgetTenantCode, bootstrapAuthConfig]);
     const status = session ? 'authenticated' : 'unauthenticated';
     const value = useMemo(() => ({
         status,
@@ -110,6 +164,11 @@ export function EnforcerAuthProvider({ children, ...options }) {
         authConfig,
         // Unknown (bootstrap off or endpoint absent) is treated as available.
         otpAvailable: !authConfig?.auth_provider || authConfig.auth_provider === 'native',
+        tenantCode,
+        tenantCodeSource,
+        forgetTenantCode,
+        setTenantCode,
+        tenantBrand,
         get options() {
             return optionsRef.current;
         },
@@ -119,7 +178,22 @@ export function EnforcerAuthProvider({ children, ...options }) {
         refresh,
         getFreshToken: getFreshAccessToken,
         signOut,
-    }), [status, session, refreshing, authConfig, client, setSession, completeSignIn, refresh, signOut]);
+    }), [
+        status,
+        session,
+        refreshing,
+        authConfig,
+        tenantCode,
+        tenantCodeSource,
+        forgetTenantCode,
+        setTenantCode,
+        tenantBrand,
+        client,
+        setSession,
+        completeSignIn,
+        refresh,
+        signOut,
+    ]);
     return _jsx(EnforcerAuthContext.Provider, { value: value, children: children });
 }
 export function useEnforcerAuth() {
